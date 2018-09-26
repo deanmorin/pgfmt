@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'pg_query'
 require 'comment'
 require 'tcl'
@@ -119,7 +121,7 @@ class Join
     1 => :join_left,
     2 => :join_full_outer,
     3 => :join_right,
-  }
+  }.freeze
 
   def initialize(raw)
     @type = TYPES.fetch(raw['jointype'])
@@ -143,8 +145,8 @@ class On
   attr_reader :foo
 
   KINDS = {
-    0 => :todo
-  }
+    0 => :todo,
+  }.freeze
 
   def initialize(raw)
     @foo = 'bar'

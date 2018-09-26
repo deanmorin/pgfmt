@@ -1,0 +1,21 @@
+AllCops:
+  Exclude:
+    - 'spec/spec_helper.rb'
+
+Metrics/LineLength:
+  Max: 100
+
+Metrics/MethodLength:
+  Enabled: false
+
+Naming/UncommunicativeMethodParamName:
+  MinNameLength: 1
+
+Style/Documentation:
+  Enabled: false
+
+Style/TrailingCommaInHashLiteral:
+  EnforcedStyleForMultiline: comma
+
+Metrics/BlockLength:
+  Enabled: false

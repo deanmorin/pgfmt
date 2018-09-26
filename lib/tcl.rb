@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Tcl
   KINDS = {
     0 => :tcl_begin,
@@ -7,7 +9,7 @@ class Tcl
     4 => :tcl_savepoint,
     5 => :tcl_release_savepoint,
     6 => :tcl_rollback_to_savepoint,
-  }
+  }.freeze
 
   def initialize(raw, opts)
     @stmt = raw['stmt']['TransactionStmt']
@@ -28,7 +30,7 @@ class Tcl
         else
           set_case(symbol_to_string(@opts[kind]))
         end
-    s = add_semicolon(s)
+    add_semicolon(s)
   end
 
   private
@@ -78,46 +80,43 @@ class TclBeginOptions
 
   def isolation
     opt = @options.find { |x| x['defname'] == 'transaction_isolation' }
-    if opt
-      val = opt['arg']['A_Const']['val']['String']['str']
-      "isolation level #{val}"
-    else
-      nil
-    end
+    return unless opt
+
+    val = opt['arg']['A_Const']['val']['String']['str']
+    "isolation level #{val}"
   end
 
   def read_only
     opt = @options.find { |x| x['defname'] == 'transaction_read_only' }
-    if opt
-      val = opt['arg']['A_Const']['val']['Integer']['ival']
-      case val
-      when READ_WRITE
-        'read write'
-      when READ_ONLY
-        'read only'
-      when nil
-        nil
-      else
-        raise "Need additional handling for #{val}"
-      end
+    return unless opt
+
+    val = opt['arg']['A_Const']['val']['Integer']['ival']
+    case val
+    when READ_WRITE
+      'read write'
+    when READ_ONLY
+      'read only'
+    when nil
+      nil
+    else
+      raise "Need additional handling for #{val}"
     end
   end
 
   def deferrable
     opt = @options.find { |x| x['defname'] == 'transaction_deferrable' }
-    if opt
-      val = opt['arg']['A_Const']['val']['Integer']['ival']
-      case val
-      when NOT_DEFERRABLE
-        'not deferrable'
-      when DEFERRABLE
-        'deferrable'
-      when nil
-        nil
-      else
-        raise "Need additional handling for #{val}"
-      end
+    return unless opt
+
+    val = opt['arg']['A_Const']['val']['Integer']['ival']
+    case val
+    when NOT_DEFERRABLE
+      'not deferrable'
+    when DEFERRABLE
+      'deferrable'
+    when nil
+      nil
+    else
+      raise "Need additional handling for #{val}"
     end
   end
 end
-

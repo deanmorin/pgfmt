@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Comment
   attr_reader :text, :start_index, :end_index
 
@@ -11,22 +13,22 @@ end
 
 class CommentParser
   def self.parse(sql)
-    cs = []
-    sql.split('').each_with_index { |c, i| cs << "#{c}: #{i}" }
-    puts cs.join("\t")
+    # cs = []
+    # sql.split('').each_with_index { |c, i| cs << "#{c}: #{i}" }
+    # puts cs.join("\t")
     line_comment_indexes = []
     block_comment_indexes = []
     i = 0
-    until i == sql.size do
-      if sql[i] == ?'
-        i = find_end_quote(sql, i + 1, ?')
-      elsif sql[i] == ?"
-        i = find_end_quote(sql, i + 1, ?")
-      elsif sql[i] == ?- and sql[i + 1] == ?-
+    until i == sql.size
+      if sql[i] == "'"
+        i = find_end_quote(sql, i + 1, "'")
+      elsif sql[i] == '"'
+        i = find_end_quote(sql, i + 1, '"')
+      elsif sql[i] == '-' && sql[i + 1] == '-'
         parsed = parse_line_comment(sql, i + 2)
         line_comment_indexes << [parsed[:start_index], parsed[:end_index]]
         i = parsed[:i]
-      elsif sql[i] == ?/ and sql[i+1] == ?*
+      elsif sql[i] == '/' && sql[i + 1] == '*'
         parsed = parse_block_comment(sql, i + 2)
         block_comment_indexes << [parsed[:start_index], parsed[:end_index]]
         i = parsed[:i]
@@ -38,42 +40,38 @@ class CommentParser
       # BlockCommentMaker.new(sql, block_comment_indexes).make
   end
 
-  private
-
   def self.find_end_quote(sql, i, type)
-    until (sql[i] == type and sql[i + 1] != type) or i == sql.size - 1
-      if sql[i] == type and sql[i + 1] == type
-        i += 2
-      else
-        i += 1
-      end
+    until (sql[i] == type && sql[i + 1] != type) || i == sql.size - 1
+      i = if sql[i] == type && sql[i + 1] == type
+            i + 2
+          else
+            i + 1
+          end
     end
     i + 1
   end
 
   def self.parse_line_comment(sql, i)
     start_index = i
-    while sql[i] != ?\n and i < sql.size
-      i += 1
-    end
+    i += 1 while sql[i] != "\n" && i < sql.size
     {
-      :start_index => start_index,
-      :end_index => i,
-      :i => i + 1,
+      start_index: start_index,
+      end_index: i,
+      i: i + 1,
     }
   end
 
   def self.parse_block_comment(sql, i)
     start_index = i
-    until (sql[i] == ?* and sql[i + 1] == ?/) or i == sql.size - 1
-      i += 1
-    end
+    i += 1 until (sql[i] == '*' && sql[i + 1] == '/') || i == sql.size - 1
     {
-      :start_index => start_index,
-      :end_index => i,
-      :i => i + 1,
+      start_index: start_index,
+      end_index: i,
+      i: i + 1,
     }
   end
+
+  private_class_method :find_end_quote, :parse_line_comment, :parse_block_comment
 end
 
 class LineCommentMaker
@@ -89,8 +87,8 @@ class LineCommentMaker
       raw_comment = @sql[is.first..is.last]
       ws_count = leading_whitespace_count(raw_comment)
 
-      # TODO explain sloppy indentation vs purposful
-      text_start = if min_ws == 0 and ws_count == 1
+      # TODO: explain sloppy indentation vs purposful
+      text_start = if min_ws.zero? && ws_count == 1
                      is.first + 1
                    else
                      is.first + min_ws
