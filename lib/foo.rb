@@ -33,71 +33,82 @@ class Sql
   end
 end
 
+class TargetList
+  def initialize(raw)
+    @raw = raw
+  end
+
+  def columns
+    @raw.map { |x| x['ResTarget']['val']['ColumnRef']['fields'].first['String']['str'] }
+  end
+end
+
 class Select
+  attr_reader :stmt
   def initialize(raw, opts)
     @stmt = raw['stmt']['SelectStmt']
     @opts = opts
   end
 
+  def to_s
+    case @opts[:general_style]
+    when :right_aligned
+      indent = '       '
+      section_just = 8 # TODO: adjust based on sections
+      # 6
+      initial_separator = ' '
+    when :left_aligned
+      indent = '       '
+      section_just = 0
+      initial_separator = ' '
+    when :heading
+      indent = ' ' * @opts[:indent_size]
+      section_just = 0
+      initial_separator = "\n#{indent}"
+    end
+    s = "#{'SELECT'.rjust(section_just, ' ')}#{initial_separator}"
+    s += target_list.join(",\n#{indent}")
+    s += "\n"
+    s += "#{'FROM'.rjust(section_just, ' ')}#{initial_separator}"
+    s += "#{from_clause.schema}.#{from_clause.name} #{from_clause.alias}"
+    s += "\n"
+    s += "#{'WHERE'.rjust(section_just, ' ')}#{initial_separator}"
+    s += "#{where_clause.lexpr} #{where_clause.operator} #{where_clause.rexpr}"
+    s += "\n"
+    s += "#{'ORDER BY'.rjust(section_just, ' ')}#{initial_separator}"
+    s += order_by.join(",\n#{indent}")
+    s
+  end
+
   def target_list
-    @stmt['targetList']
+    TargetList.new(@stmt['targetList']).columns
   end
 
-  def fromClause
-    @stmt['fromClause']
+  def from_clause
+    From.new(@stmt['fromClause'])
   end
 
-  def RangeVar(raw)
-    rv = raw['RangeVar']
-    schemaname = rv['schemaname']
-    relname = rv['relname']
+  def where_clause
+    Where.new(@stmt['whereClause'])
   end
-            # [{"RangeVar"=>
-            #    {"schemaname"=>"dw",
-            #     "relname"=>"foo",
-            #     "inh"=>true,
-            #     "relpersistence"=>"p",
-            #     "location"=>53}}],
-  #
-  #           [{"JoinExpr"=>
-       #        {"jointype"=>1,
-       #         "larg"=>
-       #          {"RangeVar"=>
-       #            {"schemaname"=>"dw",
-       #             "relname"=>"foo",
-       #             "inh"=>true,
-       #             "relpersistence"=>"p",
-       #             "alias"=>{"Alias"=>{"aliasname"=>"foo"}},
-       #             "location"=>53}},
-       #         "rarg"=>
-       #          {"RangeVar"=>
-       #            {"schemaname"=>"a",
-       #             "relname"=>"bar",
-       #             "inh"=>true,
-       #             "relpersistence"=>"p",
-       #             "alias"=>{"Alias"=>{"aliasname"=>"bar"}},
-       #             "location"=>74}},
-       #         "quals"=>
-       #          {"A_Expr"=>
-       #            {"kind"=>0,
-       #             "name"=>[{"String"=>{"str"=>"="}}],
-       #             "lexpr"=>
-       #              {"ColumnRef"=>
-       #                {"fields"=>
-       #                  [{"String"=>{"str"=>"foo"}},
-       #                   {"String"=>{"str"=>"id"}}],
-       #                 "location"=>87}},
-       #             "rexpr"=>
-       #              {"ColumnRef"=>
-       #                {"fields"=>
-       #                  [{"String"=>{"str"=>"bar"}},
-       #                   {"String"=>{"str"=>"foo_id"}}],
-       #                 "location"=>96}},
-       #             "location"=>94}}}}],
+
+  def order_by
+    OrderBy.new(@stmt['sortClause'])
+  end
+end
+
+class From
+  attr_reader :schema, :name, :alias
+
+  def initialize(raw)
+    from = raw.first['RangeVar']
+    @schema = from['schemaname']
+    @name = from['relname']
+    @alias = from['alias']['Alias']['aliasname']
+  end
 end
 
 class Joins
-
   def initialize(raw, opts)
     @stmt = raw['JoinExpr']
     @opts = opts
@@ -152,3 +163,87 @@ class On
     @foo = 'bar'
   end
 end
+
+class Where
+  attr_reader :lexpr, :operator, :rexpr
+
+  def initialize(raw)
+    @lexpr = raw['A_Expr']['lexpr']['ColumnRef']['fields'].first['String']['str']
+    @operator = raw['A_Expr']['name'].first['String']['str']
+    @rexpr = raw['A_Expr']['rexpr']['A_Const']['val']['Integer']['ival']
+  end
+end
+
+def where(raw)
+  {
+    lexpr: raw['A_Expr']['lexpr']['ColumnRef']['fields'].first['String']['str'],
+    operator: raw['A_Expr']['name'].first['String']['str'],
+    rexpr: raw['A_Expr']['rexpr']['A_Const']['val']['Integer']['ival'],
+  }
+end
+
+class OrderBy
+  attr_reader :columns
+
+  def initialize(raw)
+    @columns = raw.map { |x| OrderByColumn.new(x['SortBy']) }
+  end
+end
+
+class OrderByColumn
+  attr_reader :name, :direction, :nulls
+
+  DIRECTIONS = {
+    0 => :default,
+    1 => :asc,
+    2 => :desc,
+  }.freeze
+
+  NULLS = {
+    0 => :default,
+    1 => :first,
+    2 => :last,
+  }.freeze
+
+  def initialize(raw)
+    @name = if raw['node']['ColumnRef']
+              raw['node']['ColumnRef']['fields'].first['String']['str']
+            else
+              raw['node']['A_Const']['val']['Integer']['ival'].to_s
+            end
+    @direction = DIRECTIONS.fetch(raw['sortby_dir'])
+    @nulls = NULLS.fetch(raw['sortby_nulls'])
+  end
+end
+
+foo
+
+# module OrderBy
+#   DIRECTIONS = {
+#     0 => :default,
+#     1 => :asc,
+#     2 => :desc,
+#   }.freeze
+
+#   NULLS = {
+#     0 => :default,
+#     1 => :first,
+#     2 => :last,
+#   }.freeze
+
+#   def make(raw)
+#     raw.map { |x| column(x['SortBy']) }
+#   end
+
+#   def column(raw)
+#     {
+#       name: if raw['node']['ColumnRef']
+#               raw['node']['ColumnRef']['fields'].first['String']['str']
+#             else
+#               raw['node']['A_Const']['val']['Integer']['ival'].to_s
+#             end,
+#       direction: DIRECTIONS.fetch(raw['sortby_dir']),
+#       nulls: NULLS.fetch(raw['sortby_nulls']),
+#     }
+#   end
+# end
