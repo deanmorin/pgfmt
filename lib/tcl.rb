@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'format'
+
 class Tcl
   KINDS = {
     0 => :tcl_begin,
@@ -12,52 +14,31 @@ class Tcl
   }.freeze
 
   def initialize(raw, opts)
-    @stmt = raw['stmt']['TransactionStmt']
+    @raw = raw
     @opts = opts
   end
 
   def to_s
-    kind = KINDS.fetch(@stmt['kind'])
+    kind = KINDS.fetch(@raw['kind'])
     s = case kind
         when :tcl_begin
-          options = TclBeginOptions.new(@stmt['options']).options
-          parts = [symbol_to_string(@opts[kind])] + options
-          set_case(parts.compact.join(' '))
+          options = TclBeginOptions.new(@raw['options']).options
+          parts = [Format.sym_to_s(@opts[kind])] + options
+          Format.keyword(Format.join_parts(parts), @opts)
         when :tcl_savepoint
-          "#{set_case('savepoint')} #{savepoint_name}"
+          "#{Format.keyword('savepoint', @opts)} #{savepoint_name}"
         when :tcl_release_savepoint, :tcl_rollback_to_savepoint
-          "#{set_case(symbol_to_string(@opts[kind]))} #{savepoint_name}"
+          "#{Format.sym_to_keyword(@opts[kind], @opts)} #{savepoint_name}"
         else
-          set_case(symbol_to_string(@opts[kind]))
+          Format.sym_to_keyword(@opts[kind], @opts)
         end
-    add_semicolon(s)
+    Format.add_semicolon(s, @opts, :tcl_semicolon)
   end
 
   private
 
-  def set_case(s)
-    if @opts[:keyword_case] == :uppercase
-      s.upcase
-    else
-      s.downcase
-    end
-  end
-
-  def symbol_to_string(symbol)
-    symbol.to_s.tr('_', ' ')
-  end
-
-  def add_semicolon(s)
-    case @opts[:tcl_semicolon]
-    when :same_line
-      s + ';'
-    when :new_line
-      s + "\n;"
-    end
-  end
-
   def savepoint_name
-    @stmt['options'].first['DefElem']['arg']['String']['str']
+    @raw['options'].first['DefElem']['arg']['String']['str']
   end
 end
 
@@ -92,12 +73,9 @@ class TclBeginOptions
 
     val = opt['arg']['A_Const']['val']['Integer']['ival']
     case val
-    when READ_WRITE
-      'read write'
-    when READ_ONLY
-      'read only'
-    when nil
-      nil
+    when READ_WRITE then 'read write'
+    when READ_ONLY  then 'read only'
+    when nil        then nil
     else
       raise "Need additional handling for #{val}"
     end
@@ -109,12 +87,9 @@ class TclBeginOptions
 
     val = opt['arg']['A_Const']['val']['Integer']['ival']
     case val
-    when NOT_DEFERRABLE
-      'not deferrable'
-    when DEFERRABLE
-      'deferrable'
-    when nil
-      nil
+    when NOT_DEFERRABLE then 'not deferrable'
+    when DEFERRABLE     then 'deferrable'
+    when nil            then nil
     else
       raise "Need additional handling for #{val}"
     end
