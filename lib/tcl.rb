@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'error'
 require 'format'
 
 class Tcl
@@ -13,29 +14,17 @@ class Tcl
     6 => :tcl_rollback_to_savepoint,
   }.freeze
 
-  def initialize(raw, opts)
+  def initialize(raw)
     @raw = raw
-    @opts = opts
   end
 
-  def to_s
-    kind = KINDS.fetch(@raw['kind'])
-    s = case kind
-        when :tcl_begin
-          options = TclBeginOptions.new(@raw['options']).options
-          parts = [Format.sym_to_s(@opts[kind])] + options
-          Format.keyword(Format.join_parts(parts), @opts)
-        when :tcl_savepoint
-          "#{Format.keyword('savepoint', @opts)} #{savepoint_name}"
-        when :tcl_release_savepoint, :tcl_rollback_to_savepoint
-          "#{Format.sym_to_keyword(@opts[kind], @opts)} #{savepoint_name}"
-        else
-          Format.sym_to_keyword(@opts[kind], @opts)
-        end
-    Format.add_semicolon(s, @opts, :tcl_semicolon)
+  def kind
+    KINDS.fetch(@raw['kind'])
   end
 
-  private
+  def begin_options
+    TclBeginOptions.new(@raw['options']).options
+  end
 
   def savepoint_name
     @raw['options'].first['DefElem']['arg']['String']['str']
@@ -73,11 +62,11 @@ class TclBeginOptions
 
     val = opt['arg']['A_Const']['val']['Integer']['ival']
     case val
-    when READ_WRITE then 'read write'
-    when READ_ONLY  then 'read only'
+    when READ_WRITE then :read_write
+    when READ_ONLY  then :read_only
     when nil        then nil
     else
-      raise "Need additional handling for #{val}"
+      raise UnknownOptionError.new(GroupBy::TclBeginOptions, val)
     end
   end
 
@@ -87,11 +76,11 @@ class TclBeginOptions
 
     val = opt['arg']['A_Const']['val']['Integer']['ival']
     case val
-    when NOT_DEFERRABLE then 'not deferrable'
-    when DEFERRABLE     then 'deferrable'
+    when NOT_DEFERRABLE then :not_deferrable
+    when DEFERRABLE     then :deferrable
     when nil            then nil
     else
-      raise "Need additional handling for #{val}"
+      raise UnknownOptionError.new(GroupBy::TclBeginOptions, val)
     end
   end
 end

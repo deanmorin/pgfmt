@@ -7,6 +7,7 @@ DEFAULT_OPTS = {
   soft_line_limit:             100,
   keyword_case:                :uppercase,
   indent_size:                 2,
+  not_equal:                   :ansi,
   tcl_semicolon:               :same_line,
   tcl_begin:                   :begin,
   tcl_commit:                  :commit,
